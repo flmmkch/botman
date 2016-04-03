@@ -43,12 +43,14 @@ class NeoBotman(irc.bot.SingleServerIRCBot):
 		msg = e.arguments[0]
 		if msg[0] == '!':
 			if msg[1:] == 'phrase':
-				sentence = self.generatestring()
-				c.privmsg(self.settings['channel'], sentence)
+				self.sendnewsentence(c)
 		else:
 			self.readstring(msg)
-			if c.get_nickname() in msg:
-				c.privmsg(self.settings['channel'], sentence)
+			if str(c.get_nickname()).lower() in str(msg).lower():
+				self.sendnewsentence(c)
+	def sendnewsentence(self, c):
+			sentence = self.generatestring()
+			c.privmsg(self.settings['channel'], sentence)
 	def readstring(self, string):
 		cursor = self.dbc.cursor()
 		rawwords = string.split(' ')
@@ -79,11 +81,8 @@ class NeoBotman(irc.bot.SingleServerIRCBot):
 					nwres = self.dbc.cursor().execute("select word from words where rowid = ?", (nwid,)).fetchone()
 					if nwres:
 						nextword = str(nwres[0])
-						if wid == -1:
-							print('Possible first word:', nextword)
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
-			print('Choices', nwchoices)
 			# Weighted random for actually picking the next word
 			word = None
 			while not word:
