@@ -59,14 +59,14 @@ class NeoBotman(irc.bot.SingleServerIRCBot):
 			rwbindings.append((rw, rw))
 		idresults = cursor.executemany("insert or ignore into words(word) values(?); select rowid from words where word = ?;", (rwbindings))
 		# For each word we add an occurence with the preceding word
-		updatequery = "insert or replace into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?"
+		updatequery = "insert or ignore into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?;"
 		preceding = -1
 		for wid in idresults:
 			wordid = wid[0]
 			self.dbc.cursor().execute(updatequery, (preceding, wordid, preceding, wordid))
 			preceding = wordid
 		# Then we add the sentence ending occurence (-1)
-		cursor.execute(updatequery, (preceding, -1, preceding, -1))
+		self.dbc.cursor().execute(updatequery, (preceding, -1, preceding, -1))
 	def generatestring(self):
 		sentence = ''
 		wid = -1
