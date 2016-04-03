@@ -5,7 +5,7 @@ import irc.bot
 import unicodedata
 
 DBFILENAME='neobotman.sqlite'
-MAX_SENTENCE = 120
+MAX_SENTENCE = 320
 
 def dbinit(connection):
 	connection.cursor().execute("create table settings(skey text primary key not null, sval text); \
@@ -33,8 +33,10 @@ class NeoBotman(irc.bot.SingleServerIRCBot):
 		self.settings = settings
 		self.dbc = connection
 		self.sr = random.SystemRandom()
+		self.initcounter()
 		irc.bot.SingleServerIRCBot.__init__(self, [(self.settings['server'], int(self.settings['port']))], self.settings['nick'], self.settings['nick'])
-	
+	def initcounter(self):
+		self.counter = self.sr.randint(15, 25)
 	def on_nicknameinuse(self, c, e):
 		c.nick(self.settings['nick2'])
 	def on_welcome(self, c, e):
@@ -42,14 +44,27 @@ class NeoBotman(irc.bot.SingleServerIRCBot):
 	def on_pubmsg(self, c, e):
 		msg = e.arguments[0]
 		if msg[0] == '!':
-			if msg[1:] == 'phrase':
-				self.sendnewsentence(c)
+			command = msg.split(' ')
+			if command[0] == '!phrase':
+				if len(command) > 1:
+					self.sendnewsentence(c, msg[len(command[0]):])
+				else:
+					self.sendnewsentence(c)
 		else:
 			self.readstring(msg)
 			if str(c.get_nickname()).lower() in str(msg).lower():
 				self.sendnewsentence(c)
-	def sendnewsentence(self, c):
-			sentence = self.generatestring()
+			else:
+				self.counter -= 1
+				if self.counter <= 0:
+					self.sendnewsentence(c)
+					self.initcounter()
+	def sendnewsentence(self, c, msg = None):
+			sentence = ''
+			if msg:
+				sentence = self.generatestring(msg)
+			else:
+				sentence = self.generatestring()
 			c.privmsg(self.settings['channel'], sentence)
 	def readstring(self, string):
 		cursor = self.dbc.cursor()
@@ -67,9 +82,16 @@ class NeoBotman(irc.bot.SingleServerIRCBot):
 			preceding = wordid
 		# Then we add the sentence ending occurence (-1)
 		self.dbc.cursor().execute(updatequery, (preceding, -1, preceding, -1))
-	def generatestring(self):
-		sentence = ''
+	def generatestring(self, sentence = ''):
 		wid = -1
+		# if the sentence given is not empty
+		if len(sentence) > 0:
+			sentence = sentence.strip()
+			# begin the random part with the last word of the sentence
+			wordlist = sentence.split(' ')
+			presumed_wid = self.dbc.cursor().execute("select rowid from words where word = ?;", (wordlist[-1],)).fetchone()
+			if presumed_wid:
+				wid = presumed_wid[0]
 		finished = False
 		while not finished:
 			nwresults = self.dbc.cursor().execute("select nextword, occurences from seqs where prevword = ?;", (wid,))
