@@ -149,6 +149,9 @@ if len(sys.argv) > 1 and sys.argv[1] == 'init':
 	print('Channel:')
 	settings['channel'] = input('> ').strip()
 else:
+	if not os.path.exists(DBFILENAME):
+		print('Launch the script with the parameter "init" to initialize the database first')
+		sys.exit()
 	connection=apsw.Connection(DBFILENAME)
 	settings = SettingGroup(connection)
 nbm = NeoBotman(settings, connection)
