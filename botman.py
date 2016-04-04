@@ -198,9 +198,8 @@ def feed_db(filenames):
 	for filename in filenames:
 		with open(filename, 'r', encoding='utf-8') as infile:
 			for line in infile:
-				sentences = line.split('.')
-				for sentence in sentences:
-					slist.append(sentence.replace("\r", ""))
+				if len(line) > 0:
+					slist.append(line.replace("\r", ""))
 	for sentence in slist:
 		botman.readstring(sentence)
 		print('Read sentence:', sentence)
