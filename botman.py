@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 
 import os, sys, time, random
 import apsw
@@ -28,7 +29,7 @@ class SettingGroup:
 		self.c.cursor().execute("insert or replace into settings(skey, sval) values(?, ?)", (key, value))
 		self.s[key] = value
 
-class NeoBotman(irc.bot.SingleServerIRCBot):
+class Botman(irc.bot.SingleServerIRCBot):
 	def __init__(self, settings, connection):
 		self.settings = settings
 		self.dbc = connection
@@ -154,6 +155,6 @@ else:
 		sys.exit()
 	connection=apsw.Connection(DBFILENAME)
 	settings = SettingGroup(connection)
-nbm = NeoBotman(settings, connection)
+nbm = Botman(settings, connection)
 nbm.start()
 connection.close()
