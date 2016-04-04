@@ -199,7 +199,7 @@ def feed_db(filenames):
 		with open(filename, 'r', encoding='utf-8') as infile:
 			for line in infile:
 				if len(line) > 0:
-					slist.append(line.replace("\r", ""))
+					slist.append(line.replace("\r", "").replace("\n", ""))
 	for sentence in slist:
 		botman.readstring(sentence)
 	connection.close()
