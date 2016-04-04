@@ -174,7 +174,6 @@ irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
 
 def configure():
 	connection=apsw.Connection(DBFILENAME)
-	dbinit(connection)
 	settings = SettingGroup(connection)
 	print('IRC server:')
 	settings['server'] = input('> ').strip()
@@ -216,6 +215,9 @@ if len(sys.argv) > 1:
 	if sys.argv[1] == 'init':
 		if os.path.exists(DBFILENAME):
 			os.remove(DBFILENAME)
+		connection=apsw.Connection(DBFILENAME)
+		dbinit(connection)
+		connection.close()
 	if sys.argv[1] in ['init', 'config']:
 		configure()
 	elif sys.argv[1] == 'help':
