@@ -43,13 +43,14 @@ class Botman:
 		idresults = cursor.executemany("insert or ignore into words(word) values(?); select rowid from words where word = ?;", (rwbindings))
 		# For each word we add an occurence with the preceding word
 		updatequery = "insert or ignore into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?;"
+		updatebindings = []
 		preceding = -1
-		for wid in idresults:
-			wordid = wid[0]
-			self.dbc.cursor().execute(updatequery, (preceding, wordid, preceding, wordid))
+		for wordid, in idresults:
+			updatebindings.append((preceding, wordid, preceding, wordid))
 			preceding = wordid
 		# Then we add the sentence ending occurence (-1)
-		self.dbc.cursor().execute(updatequery, (preceding, -1, preceding, -1))
+		updatebindings.append((preceding, -1, preceding, -1))
+		self.dbc.cursor().executemany(updatequery, updatebindings)
 	def generatestring(self, sentence = '', invert = False):
 		wid = -1
 		# if the sentence given is not empty
@@ -150,12 +151,12 @@ class IRCBotman(irc.bot.SingleServerIRCBot):
 		if msg[0] != '!':
 			self.botman.readstring(msg)
 	def sendnewsentence(self, c, msg = None, invert = False):
-			sentence = ''
-			if msg:
-				sentence = self.botman.generatestring(msg, invert)
-			else:
-				sentence = self.botman.generatestring()
-			c.privmsg(self.settings['channel'], sentence.replace("\r","").replace("\n",""))
+		sentence = ''
+		if msg:
+			sentence = self.botman.generatestring(msg, invert)
+		else:
+			sentence = self.botman.generatestring()
+		c.privmsg(self.settings['channel'], sentence.replace("\r","").replace("\n",""))
 
 irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
 
@@ -196,6 +197,7 @@ def feed_db(filenames):
 				for sentence in sentences:
 					sentence = sentence.replace("\r", "")
 					botman.readstring(sentence)
+					print('Read sentence:', sentence)
 	connection.close()
 
 if len(sys.argv) > 1:
