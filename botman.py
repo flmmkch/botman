@@ -40,21 +40,24 @@ class Botman:
 		if len(string) == 0:
 			return
 		cursor = self.dbc.cursor()
-		rawwords = string.split(' ')
-		rwbindings = []
-		for rw in rawwords:
-			rwbindings.append((rw, rw))
-		idresults = cursor.executemany("insert or ignore into words(word) values(?); select rowid from words where word = ?;", (rwbindings))
+		rw = []
+		for rawword in string.split(' '):
+			rw.append((rawword,))
+		cursor.execute("begin;")
+		cursor.executemany("insert or ignore into words(word) values(?);", rw)
+		cursor.execute("commit;")
 		# For each word we add an occurence with the preceding word
-		updatequery = "insert or ignore into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?;"
 		updatebindings = []
 		preceding = -1
-		for wordid, in idresults:
+		for wordid, in cursor.executemany("select rowid from words where word = ?;", rw):
 			updatebindings.append((preceding, wordid, preceding, wordid))
 			preceding = wordid
 		# Then we add the sentence ending occurence (-1)
 		updatebindings.append((preceding, -1, preceding, -1))
-		self.dbc.cursor().executemany(updatequery, updatebindings)
+		cursor = self.dbc.cursor()
+		cursor.execute("begin;")
+		cursor.executemany("insert or ignore into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?;", updatebindings)
+		cursor.execute("commit;")
 	def generatestring(self, sentence = '', invert = False):
 		wid = -1
 		# if the sentence given is not empty
@@ -75,15 +78,12 @@ class Botman:
 				nwquery = "select prevword, occurences from seqs where nextword = ?;"
 			else:
 				nwquery = "select nextword, occurences from seqs where prevword = ?;"
-			nwresults = self.dbc.cursor().execute(nwquery, (wid,))
 			nwchoices = []
 			totaloccurences = 0
-			for nwid, occurences in nwresults:
+			for nwid, occurences in self.dbc.cursor().execute(nwquery, (wid,)):
 				nextword = None
 				if nwid >= 0:
-					nwres = self.dbc.cursor().execute("select word from words where rowid = ?", (nwid,)).fetchone()
-					if nwres:
-						nextword = str(nwres[0])
+					nextword, = self.dbc.cursor().execute("select word from words where rowid = ?", (nwid,)).fetchone()
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
 			# Quit if there's no choice
@@ -202,7 +202,6 @@ def feed_db(filenames):
 					slist.append(line.replace("\r", ""))
 	for sentence in slist:
 		botman.readstring(sentence)
-		print('Read sentence:', sentence)
 	connection.close()
 
 if len(sys.argv) > 1:
