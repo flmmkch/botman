@@ -81,6 +81,9 @@ class Botman:
 						nextword = str(nwres[0])
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
+			# Quit if there's no choice
+			if totaloccurences == 0:
+				return sentence
 			# Weighted random for actually picking the next word
 			word = None
 			while not word:
@@ -142,13 +145,17 @@ class IRCBotman(irc.bot.SingleServerIRCBot):
 				if self.counter <= 0:
 					self.sendnewsentence(c)
 					self.initcounter()
+	def on_privmsg(self, c, e):
+		msg = e.arguments[0]
+		if msg[0] != '!':
+			self.botman.readstring(msg)
 	def sendnewsentence(self, c, msg = None, invert = False):
 			sentence = ''
 			if msg:
 				sentence = self.botman.generatestring(msg, invert)
 			else:
 				sentence = self.botman.generatestring()
-			c.privmsg(self.settings['channel'], sentence)
+			c.privmsg(self.settings['channel'], sentence.replace("\r","").replace("\n",""))
 
 irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
 
