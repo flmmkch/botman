@@ -5,7 +5,7 @@ import apsw
 import irc.bot
 import unicodedata
 
-DBFILENAME='neobotman.sqlite'
+DBFILENAME='botman.sqlite'
 MAX_SENTENCE = 320
 
 def dbinit(connection):
@@ -51,6 +51,8 @@ class Botman(irc.bot.SingleServerIRCBot):
 					self.sendnewsentence(c, msg[len(command[0]):])
 				else:
 					self.sendnewsentence(c)
+			elif command[0] == '!phraseinv' and len(command) > 1:
+				self.sendnewsentence(c, msg[len(command[0]):], True)
 		else:
 			self.readstring(msg)
 			if str(c.get_nickname()).lower() in str(msg).lower():
@@ -60,10 +62,10 @@ class Botman(irc.bot.SingleServerIRCBot):
 				if self.counter <= 0:
 					self.sendnewsentence(c)
 					self.initcounter()
-	def sendnewsentence(self, c, msg = None):
+	def sendnewsentence(self, c, msg = None, invert = False):
 			sentence = ''
 			if msg:
-				sentence = self.generatestring(msg)
+				sentence = self.generatestring(msg, invert)
 			else:
 				sentence = self.generatestring()
 			c.privmsg(self.settings['channel'], sentence)
@@ -83,19 +85,27 @@ class Botman(irc.bot.SingleServerIRCBot):
 			preceding = wordid
 		# Then we add the sentence ending occurence (-1)
 		self.dbc.cursor().execute(updatequery, (preceding, -1, preceding, -1))
-	def generatestring(self, sentence = ''):
+	def generatestring(self, sentence = '', invert = False):
 		wid = -1
 		# if the sentence given is not empty
 		if len(sentence) > 0:
 			sentence = sentence.strip()
 			# begin the random part with the last word of the sentence
 			wordlist = sentence.split(' ')
-			presumed_wid = self.dbc.cursor().execute("select rowid from words where word = ?;", (wordlist[-1],)).fetchone()
+			if invert:
+				startword = 0
+			else:
+				startword = -1
+			presumed_wid = self.dbc.cursor().execute("select rowid from words where word = ?;", (wordlist[startword],)).fetchone()
 			if presumed_wid:
 				wid = presumed_wid[0]
 		finished = False
 		while not finished:
-			nwresults = self.dbc.cursor().execute("select nextword, occurences from seqs where prevword = ?;", (wid,))
+			if invert:
+				nwquery = "select prevword, occurences from seqs where nextword = ?;"
+			else:
+				nwquery = "select nextword, occurences from seqs where prevword = ?;"
+			nwresults = self.dbc.cursor().execute(nwquery, (wid,))
 			nwchoices = []
 			totaloccurences = 0
 			for nwid, occurences in nwresults:
@@ -119,9 +129,14 @@ class Botman(irc.bot.SingleServerIRCBot):
 			# Adding the word to the sentence
 			wid = word[2]
 			if wid >= 0:
-				if len(sentence) > 0:
-					sentence += ' '
-				sentence += word[0]
+				if invert:
+					if len(sentence) > 0:
+						sentence = ' ' + sentence
+					sentence = word[0] + sentence
+				else:
+					if len(sentence) > 0:
+						sentence += ' '
+					sentence += word[0]
 				if len(sentence) > MAX_SENTENCE:
 					finished = True
 			else:
