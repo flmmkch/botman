@@ -11,7 +11,9 @@ MAX_SENTENCE = 320
 def dbinit(connection):
 	connection.cursor().execute("create table settings(skey text primary key not null, sval text); \
 					create table words(word text primary key not null); \
-					create table seqs(prevword int, nextword int, occurences int default 0, primary key(prevword, nextword));")
+					create table seqs(prevword int, nextword int, occurences int default 0, primary key(prevword, nextword)); \
+					create index widx on words(word); \
+					create index wseq on seqs(prevword, nextword);")
 
 class SettingGroup:
 	def __init__(self, connection):
@@ -35,6 +37,8 @@ class Botman:
 		self.dbc = dbconnection
 		self.sr = random.SystemRandom()
 	def readstring(self, string):
+		if len(string) == 0:
+			return
 		cursor = self.dbc.cursor()
 		rawwords = string.split(' ')
 		rwbindings = []
@@ -190,14 +194,16 @@ def display_help():
 def feed_db(filenames):
 	connection=apsw.Connection(DBFILENAME)
 	botman = Botman(SettingGroup(connection), connection)
+	slist = []
 	for filename in filenames:
 		with open(filename, 'r', encoding='utf-8') as infile:
 			for line in infile:
 				sentences = line.split('.')
 				for sentence in sentences:
-					sentence = sentence.replace("\r", "")
-					botman.readstring(sentence)
-					print('Read sentence:', sentence)
+					slist.append(sentence.replace("\r", ""))
+	for sentence in slist:
+		botman.readstring(sentence)
+		print('Read sentence:', sentence)
 	connection.close()
 
 if len(sys.argv) > 1:
