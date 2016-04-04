@@ -29,46 +29,11 @@ class SettingGroup:
 		self.c.cursor().execute("insert or replace into settings(skey, sval) values(?, ?)", (key, value))
 		self.s[key] = value
 
-class Botman(irc.bot.SingleServerIRCBot):
-	def __init__(self, settings, connection):
+class Botman:
+	def __init__(self, settings, dbconnection):
 		self.settings = settings
-		self.dbc = connection
+		self.dbc = dbconnection
 		self.sr = random.SystemRandom()
-		self.initcounter()
-		irc.bot.SingleServerIRCBot.__init__(self, [(self.settings['server'], int(self.settings['port']))], self.settings['nick'], self.settings['nick'])
-	def initcounter(self):
-		self.counter = self.sr.randint(15, 25)
-	def on_nicknameinuse(self, c, e):
-		c.nick(self.settings['nick2'])
-	def on_welcome(self, c, e):
-		c.join(self.settings['channel'])
-	def on_pubmsg(self, c, e):
-		msg = e.arguments[0]
-		if msg[0] == '!':
-			command = msg.split(' ')
-			if command[0] == '!phrase':
-				if len(command) > 1:
-					self.sendnewsentence(c, msg[len(command[0]):])
-				else:
-					self.sendnewsentence(c)
-			elif command[0] == '!phraseinv' and len(command) > 1:
-				self.sendnewsentence(c, msg[len(command[0]):], True)
-		else:
-			self.readstring(msg)
-			if str(c.get_nickname()).lower() in str(msg).lower():
-				self.sendnewsentence(c)
-			else:
-				self.counter -= 1
-				if self.counter <= 0:
-					self.sendnewsentence(c)
-					self.initcounter()
-	def sendnewsentence(self, c, msg = None, invert = False):
-			sentence = ''
-			if msg:
-				sentence = self.generatestring(msg, invert)
-			else:
-				sentence = self.generatestring()
-			c.privmsg(self.settings['channel'], sentence)
 	def readstring(self, string):
 		cursor = self.dbc.cursor()
 		rawwords = string.split(' ')
@@ -143,11 +108,51 @@ class Botman(irc.bot.SingleServerIRCBot):
 				finished = True
 		return sentence
 
+class IRCBotman(irc.bot.SingleServerIRCBot):
+	def __init__(self, settings, dbconnection):
+		self.settings = settings
+		self.dbc = dbconnection
+		self.sr = random.SystemRandom()
+		self.botman = Botman(settings, dbconnection)
+		self.initcounter()
+		irc.bot.SingleServerIRCBot.__init__(self, [(self.settings['server'], int(self.settings['port']))], self.settings['nick'], self.settings['nick'])
+	def initcounter(self):
+		self.counter = self.sr.randint(15, 25)
+	def on_nicknameinuse(self, c, e):
+		c.nick(self.settings['nick2'])
+	def on_welcome(self, c, e):
+		c.join(self.settings['channel'])
+	def on_pubmsg(self, c, e):
+		msg = e.arguments[0]
+		if msg[0] == '!':
+			command = msg.split(' ')
+			if command[0] == '!phrase':
+				if len(command) > 1:
+					self.sendnewsentence(c, msg[len(command[0]):])
+				else:
+					self.sendnewsentence(c)
+			elif command[0] == '!phraseinv' and len(command) > 1:
+				self.sendnewsentence(c, msg[len(command[0]):], True)
+		else:
+			self.botman.readstring(msg)
+			if str(c.get_nickname()).lower() in str(msg).lower():
+				self.sendnewsentence(c)
+			else:
+				self.counter -= 1
+				if self.counter <= 0:
+					self.sendnewsentence(c)
+					self.initcounter()
+	def sendnewsentence(self, c, msg = None, invert = False):
+			sentence = ''
+			if msg:
+				sentence = self.botman.generatestring(msg, invert)
+			else:
+				sentence = self.botman.generatestring()
+			c.privmsg(self.settings['channel'], sentence)
+
 irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
 
-if len(sys.argv) > 1 and sys.argv[1] == 'init':
-	if os.path.exists(DBFILENAME):
-		os.remove(DBFILENAME)
+def configure():
 	connection=apsw.Connection(DBFILENAME)
 	dbinit(connection)
 	settings = SettingGroup(connection)
@@ -164,12 +169,45 @@ if len(sys.argv) > 1 and sys.argv[1] == 'init':
 	settings['nick2'] = settings['nick'] + '_'
 	print('Channel:')
 	settings['channel'] = input('> ').strip()
-else:
-	if not os.path.exists(DBFILENAME):
-		print('Launch the script with the parameter "init" to initialize the database first')
-		sys.exit()
+	connection.close()
+
+def display_help():
+	print('Usage: ./botman.py [optional command]')
+	print('List of special commands:')
+	print('* help to print this help')
+	print('* init to initialize the database and configuration then launch the bot for the first time')
+	print('* config to only change the configuration of the bot, such as IRC settings')
+	print('* feed [filename] to feed a text file to the database')
+
+def feed_db(filenames):
 	connection=apsw.Connection(DBFILENAME)
-	settings = SettingGroup(connection)
-nbm = Botman(settings, connection)
+	botman = Botman(SettingGroup(connection), connection)
+	for filename in filenames:
+		with open(filename, 'r', encoding='utf-8') as infile:
+			for line in infile:
+				sentences = line.split('.')
+				for sentence in sentences:
+					sentence = sentence.replace("\r", "")
+					botman.readstring(sentence)
+	connection.close()
+
+if len(sys.argv) > 1:
+	if sys.argv[1] == 'init':
+		if os.path.exists(DBFILENAME):
+			os.remove(DBFILENAME)
+	if sys.argv[1] in ['init', 'config']:
+		configure()
+	elif sys.argv[1] == 'help':
+		display_help()
+	elif sys.argv[1] == 'feed':
+		feed_db(sys.argv[2:])
+	if sys.argv[1] in ['config', 'help', 'feed']:
+		sys.exit()
+if not os.path.exists(DBFILENAME):
+	print('Launch the script with the parameter "init" to initialize the database first')
+	sys.exit()
+connection=apsw.Connection(DBFILENAME)
+settings = SettingGroup(connection)
+nbm = IRCBotman(settings, connection)
 nbm.start()
 connection.close()
