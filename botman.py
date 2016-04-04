@@ -2,7 +2,7 @@
 
 import os, sys, time, random
 import apsw
-import irc.bot
+import irc, irc.bot
 import unicodedata
 
 DBFILENAME='botman.sqlite'
@@ -83,7 +83,9 @@ class Botman:
 			for nwid, occurences in self.dbc.cursor().execute(nwquery, (wid,)):
 				nextword = None
 				if nwid >= 0:
-					nextword, = self.dbc.cursor().execute("select word from words where rowid = ?", (nwid,)).fetchone()
+					result =  self.dbc.cursor().execute("select word from words where rowid = ?", (nwid,)).fetchone()
+					if result:
+						nextword = result[0]
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
 			# Quit if there's no choice
@@ -131,36 +133,42 @@ class IRCBotman(irc.bot.SingleServerIRCBot):
 	def on_welcome(self, c, e):
 		c.join(self.settings['channel'])
 	def on_pubmsg(self, c, e):
+		self.reply(c, e, e.target)
+	def on_privmsg(self, c, e):
+		nick = e.source[:e.source.find('!')]
+		self.reply(c, e, nick)
+	def on_join(self, c, e):
+		print('Joining channel', e.target)
+	def on_kick(self, c, e):
+		if e.target == self.settings['channel'] and e.arguments[0] == c.get_nickname():
+			c.join(self.settings['channel'])
+	def reply(self, c, e, target):
 		msg = e.arguments[0]
 		if msg[0] == '!':
 			command = msg.split(' ')
 			if command[0] == '!phrase':
 				if len(command) > 1:
-					self.sendnewsentence(c, msg[len(command[0]):])
+					self.sendnewsentence(c, target, msg[len(command[0]):])
 				else:
-					self.sendnewsentence(c)
+					self.sendnewsentence(c, target)
 			elif command[0] == '!phraseinv' and len(command) > 1:
-				self.sendnewsentence(c, msg[len(command[0]):], True)
+				self.sendnewsentence(c, target, msg[len(command[0]):], True)
 		else:
 			self.botman.readstring(msg)
 			if str(c.get_nickname()).lower() in str(msg).lower():
-				self.sendnewsentence(c)
+				self.sendnewsentence(c, target)
 			else:
 				self.counter -= 1
 				if self.counter <= 0:
-					self.sendnewsentence(c)
+					self.sendnewsentence(c, target)
 					self.initcounter()
-	def on_privmsg(self, c, e):
-		msg = e.arguments[0]
-		if msg[0] != '!':
-			self.botman.readstring(msg)
-	def sendnewsentence(self, c, msg = None, invert = False):
+	def sendnewsentence(self, c, target, msg = None, invert = False):
 		sentence = ''
 		if msg:
 			sentence = self.botman.generatestring(msg, invert)
 		else:
 			sentence = self.botman.generatestring()
-		c.privmsg(self.settings['channel'], sentence.replace("\r","").replace("\n",""))
+		c.privmsg(target, sentence.replace("\r","").replace("\n",""))
 
 irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
 
