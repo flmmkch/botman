@@ -1,5 +1,5 @@
 # Botman
-Dumb IRC talking bot, using Python and SQLite.
+Simple IRC talking bot, using Python and SQLite.
 
 Usage: ./botman.py [optional command]
 
