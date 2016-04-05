@@ -132,6 +132,18 @@ class BotmanInterface:
 	MODE_FEED = 3
 	MODE_HELP = 4
 	def __init__(self, arguments = sys.argv):
+		self.mode = self.MODE_RUN
+		if len(arguments) > 1:
+			if arguments[1] == 'init':
+				self.mode = self.MODE_INIT
+			elif arguments[1] == 'config':
+				self.mode = self.MODE_CONFIGURE
+			elif arguments[1] == 'help':
+				self.mode = self.MODE_HELP
+			elif arguments[1] == 'feed':
+				self.mode = self.MODE_FEED
+		if not can_run:
+			sys.exit()
 		if not os.path.exists(DBFILENAME):
 			print('Launch the script with the parameter "init" to initialize the database first')
 			sys.exit()
@@ -147,16 +159,6 @@ class BotmanInterface:
 			alias = alias.strip()
 			if len(alias) > 0:
 				self.aliases.append(alias.lower())
-		self.mode = self.MODE_RUN
-		if len(arguments) > 1:
-			if arguments[1] == 'init':
-				self.mode = self.MODE_INIT
-			elif arguments[1] == 'config':
-				self.mode = self.MODE_CONFIGURE
-			elif arguments[1] == 'help':
-				self.mode = self.MODE_HELP
-			elif arguments[1] == 'feed':
-				self.mode = self.MODE_FEED
 				self.filestofeed = arguments[2:]
 	def initcounter(self, conversationid):
 		self.counter[conversationid] = self.sr.randint(15, 25)
@@ -213,8 +215,8 @@ class BotmanInterface:
 					stripped = line.replace("\r", "").replace("\t", " ").strip()
 					if len(stripped) > 0:
 						self.corebot.readstring(stripped)
-	def run(self):
-		exiting = False
+	def can_run(self):
+		running = True
 		if self.mode == self.MODE_INIT:
 			# Deleting the SQLite file to fully reset the databse
 			filename = self.dbc.db_filename('main')
@@ -224,15 +226,17 @@ class BotmanInterface:
 			self.dbc = apsw.Connection(filename)
 			self.settings = SettingGroup(self.dbc)
 			self.corebot = BotmanCore(self.dbc)
-		if self.mode in [self.MODE_INIT, self.MODE_CONFIGURE]:
 			self.configure()
-			exiting = True
+		elif self.mode == self.MODE_CONFIGURE:
+			self.configure()
+			running = False
 		elif self.mode == self.MODE_HELP:
 			self.display_help()
-			exiting = True
+			running = False
 		elif self.mode == self.MODE_FEED:
 			self.feed_db()
-			exiting = True
-		return exiting
+			running = False
+		return running
 	def close(self):
 		self.dbc.close()
+
