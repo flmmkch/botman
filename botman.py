@@ -144,6 +144,7 @@ class BotmanInterface:
 				self.mode = self.MODE_HELP
 			elif arguments[1] == 'feed':
 				self.mode = self.MODE_FEED
+				self.filestofeed = arguments[2:]
 		self.running = True
 		if self.mode != self.MODE_INIT and not os.path.exists(DBFILENAME):
 			print('Launch the script with the parameter "init" to initialize the database first')
@@ -165,10 +166,9 @@ class BotmanInterface:
 		self.aliases = []
 		if 'aliases' in self.settings:
 			for alias in self.settings['aliases']:
-				alias = alias.strip()
+				alias = alias.strip().lower()
 				if len(alias) > 0:
-					self.aliases.append(alias.lower())
-					self.filestofeed = arguments[2:]
+					self.aliases.append(alias)
 	def initcounter(self, conversationid):
 		self.counter[conversationid] = self.sr.randint(15, 25)
 	# Receive a message
@@ -220,7 +220,7 @@ class BotmanInterface:
 		elif len(aliases) > 0:
 			self.settings['aliases'] = aliases
 	def feed_db(self):
-		for filename in filenames:
+		for filename in self.filestofeed:
 			with open(filename, 'r', encoding='utf-8') as infile:
 				for line in infile:
 					stripped = line.replace("\r", "").replace("\t", " ").strip()
