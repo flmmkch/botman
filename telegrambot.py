@@ -22,7 +22,9 @@ class TelegramBotman(BotmanInterface):
 			self.run()
 			self.apikey = self.settings['telegram_apikey']
 			me = self.getJsonResponse('getMe')
-			self.nickname = me['result']['first_name'].lower()
+			nick = me['result']['first_name'].lower()
+			if not nick in self.aliases:
+				self.aliases.append(nick)
 	def start(self):
 		while self.running:
 			self.update()
@@ -44,15 +46,14 @@ class TelegramBotman(BotmanInterface):
 		sleep(1)
 	def process_update(self, update):
 		if 'message' in update:
-			msg = None
 			if 'text' in update['message']:
-				msg = update['message']['text']
+				message = update['message']['text']
 				chat_id = int(update['message']['chat']['id'])
 				message_id = int(update['message']['message_id'])
-				self.receivemessage(msg, chat_id, {'original_id': message_id, 'chat_id': chat_id})
+				self.receivemessage(message, chat_id, {'original_id': message_id})
 	def sendnewsentence(self, chat_id, base = '', invert = False, userparams = None):
 		sentence = self.corebot.generatestring(base, invert)
-		if 'original_id' in userparams and self.counter[chat_id] != 0:
+		if 'original_id' in userparams and self.counter[chat_id] > 0:
 			self.getJsonResponse('sendMessage', chat_id=chat_id, text=sentence, reply_to_message_id=userparams['original_id'])
 		else:
 			self.getJsonResponse('sendMessage', chat_id=chat_id, text=sentence)

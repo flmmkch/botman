@@ -173,7 +173,7 @@ class BotmanInterface:
 		self.counter[conversationid] = self.sr.randint(15, 25)
 	# Receive a message
 	def receivemessage(self, message, conversationid, userparams = None):
-		if conversationid not in self.counter:
+		if not conversationid in self.counter:
 			self.initcounter(conversationid)
 		if message[0] == self.COMMAND_SIGN:
 			arguments = message.split(' ')
