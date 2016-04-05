@@ -57,6 +57,7 @@ class TelegramBotman(BotmanInterface):
 		else:
 			self.getJsonResponse('sendMessage', chat_id=chat_id, text=sentence)
 	def configure(self):
+		super().configure()
 		apikey = input('API key (empty = unchanged): ').strip()
 		if len(apikey) > 0:
 			self.settings['telegram_apikey'] = apikey
