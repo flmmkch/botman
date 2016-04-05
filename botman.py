@@ -142,7 +142,7 @@ class BotmanInterface:
 				self.mode = self.MODE_HELP
 			elif arguments[1] == 'feed':
 				self.mode = self.MODE_FEED
-		if not can_run:
+		if not self.check_params():
 			sys.exit()
 		if not os.path.exists(DBFILENAME):
 			print('Launch the script with the parameter "init" to initialize the database first')
@@ -215,7 +215,7 @@ class BotmanInterface:
 					stripped = line.replace("\r", "").replace("\t", " ").strip()
 					if len(stripped) > 0:
 						self.corebot.readstring(stripped)
-	def can_run(self):
+	def check_params(self):
 		running = True
 		if self.mode == self.MODE_INIT:
 			# Deleting the SQLite file to fully reset the databse
