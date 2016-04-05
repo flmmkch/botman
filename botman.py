@@ -23,6 +23,8 @@ class SettingGroup:
 	def __setitem__(self, key, value):
 		self.c.cursor().execute("insert or replace into settings(skey, sval) values(?, ?)", (key, value))
 		self.s[key] = value
+	def __contains__(self, a):
+		return a in self.s
 
 class BotmanCore:
 	def __init__(self, dbconnection):
@@ -142,12 +144,18 @@ class BotmanInterface:
 				self.mode = self.MODE_HELP
 			elif arguments[1] == 'feed':
 				self.mode = self.MODE_FEED
-		if not self.check_params():
-			sys.exit()
-		if not os.path.exists(DBFILENAME):
+		self.running = True
+		if self.mode != self.MODE_INIT and not os.path.exists(DBFILENAME):
 			print('Launch the script with the parameter "init" to initialize the database first')
-			sys.exit()
+			self.running = False
+			return
+		if self.mode == self.MODE_INIT:
+			# Deleting the SQLite file to fully reset the database
+			if os.path.exists(DBFILENAME):
+				os.remove(DBFILENAME)
 		self.dbc = apsw.Connection(DBFILENAME)
+		if self.mode == self.MODE_INIT:
+			BotmanCore.dbinit(apsw.Connection(DBFILENAME))
 		self.settings = SettingGroup(self.dbc)
 		self.corebot = BotmanCore(self.dbc)
 		self.sr = random.SystemRandom()
@@ -155,11 +163,12 @@ class BotmanInterface:
 		self.counter = {}
 		# Aliases that the bot responds to
 		self.aliases = []
-		for alias in self.settings['aliases']:
-			alias = alias.strip()
-			if len(alias) > 0:
-				self.aliases.append(alias.lower())
-				self.filestofeed = arguments[2:]
+		if 'aliases' in self.settings:
+			for alias in self.settings['aliases']:
+				alias = alias.strip()
+				if len(alias) > 0:
+					self.aliases.append(alias.lower())
+					self.filestofeed = arguments[2:]
 	def initcounter(self, conversationid):
 		self.counter[conversationid] = self.sr.randint(15, 25)
 	# Receive a message
@@ -202,7 +211,8 @@ class BotmanInterface:
 		print('* config to only change the configuration of the bot, such as IRC settings')
 		print('* feed [filename] to feed a text file to the database')
 	def configure(self):
-		print('Current aliases:', self.aliases)
+		if 'aliases' in self.settings:
+			print('Current aliases:', self.settings['aliases'])
 		aliases = input('Aliases (separated by commas, empty = unchanged, . = empty): ')
 		if aliases == '.':
 			self.settings['aliases'] = ''
@@ -215,28 +225,20 @@ class BotmanInterface:
 					stripped = line.replace("\r", "").replace("\t", " ").strip()
 					if len(stripped) > 0:
 						self.corebot.readstring(stripped)
-	def check_params(self):
-		running = True
-		if self.mode == self.MODE_INIT:
-			# Deleting the SQLite file to fully reset the databse
-			filename = self.dbc.db_filename('main')
-			self.dbc.close()
-			if os.path.exists(filename):
-				os.remove(filename)
-			self.dbc = apsw.Connection(filename)
-			self.settings = SettingGroup(self.dbc)
-			self.corebot = BotmanCore(self.dbc)
-			self.configure()
-		elif self.mode == self.MODE_CONFIGURE:
-			self.configure()
-			running = False
-		elif self.mode == self.MODE_HELP:
-			self.display_help()
-			running = False
-		elif self.mode == self.MODE_FEED:
-			self.feed_db()
-			running = False
-		return running
+	def run(self):
+		if self.running:
+			if self.mode == self.MODE_INIT:
+				self.configure()
+			elif self.mode == self.MODE_CONFIGURE:
+				self.configure()
+				self.running = False
+			elif self.mode == self.MODE_HELP:
+				self.display_help()
+				self.running = False
+			elif self.mode == self.MODE_FEED:
+				self.feed_db()
+				self.running = False
+		return self.running
 	def close(self):
 		self.dbc.close()
 

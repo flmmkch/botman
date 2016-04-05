@@ -33,6 +33,8 @@ class IRCBotman(BotmanInterface):
 class IRCBotmanHandler(irc.bot.SingleServerIRCBot):
 	def __init__(self):
 		self.botman = IRCBotman(self)
+		if not self.botman.run():
+			sys.exit()
 		self.settings = self.botman.settings
 		irc.bot.SingleServerIRCBot.__init__(self, [(self.settings['irc_server'], int(self.settings['irc_port']))], self.settings['irc_nick'], self.settings['irc_nick'])
 	def on_nicknameinuse(self, c, e):
