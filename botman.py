@@ -103,7 +103,7 @@ class Botman:
 						break
 			# Adding the word to the sentence
 			wid = word[2]
-			if wid >= 0:
+			if wid >= 0 and word[0]:
 				if invert:
 					if len(sentence) > 0:
 						sentence = ' ' + sentence
