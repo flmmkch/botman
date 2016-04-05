@@ -200,6 +200,7 @@ class BotmanInterface:
 				self.counter[conversationid] -= 1
 				if self.counter[conversationid] <= 0:
 					self.sendnewsentence(conversationid, '', False, userparams)
+					self.initcounter(conversationid)
 	def sendnewsentence(self, target, base = '', invert = False, userparams = None):
 		sentence = self.corebot.generatestring(base, invert)
 		return sentence
