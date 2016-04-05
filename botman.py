@@ -8,13 +8,6 @@ import unicodedata
 DBFILENAME='botman.sqlite'
 MAX_SENTENCE = 320
 
-def dbinit(connection):
-	connection.cursor().execute("create table settings(skey text primary key not null, sval text); \
-					create table words(word text primary key not null); \
-					create table seqs(prevword int, nextword int, occurences int default 0, primary key(prevword, nextword)); \
-					create index widx on words(word); \
-					create index wseq on seqs(prevword, nextword);")
-
 class SettingGroup:
 	def __init__(self, connection):
 		self.c = connection
@@ -31,11 +24,19 @@ class SettingGroup:
 		self.c.cursor().execute("insert or replace into settings(skey, sval) values(?, ?)", (key, value))
 		self.s[key] = value
 
-class Botman:
-	def __init__(self, settings, dbconnection):
-		self.settings = settings
+class BotmanCore:
+	def __init__(self, dbconnection):
 		self.dbc = dbconnection
 		self.sr = random.SystemRandom()
+	# Initializing the SQLite database
+	@staticmethod
+	def dbinit(connection):
+		connection.cursor().execute("create table settings(skey text primary key not null, sval text); \
+									create table words(word text primary key not null); \
+									create table seqs(prevword int, nextword int, occurences int default 0, primary key(prevword, nextword)); \
+									create index widx on words(word); \
+									create index wseq on seqs(prevword, nextword);")
+	# Reading and processing a string
 	def readstring(self, string):
 		if len(string) == 0:
 			return
@@ -58,9 +59,11 @@ class Botman:
 		cursor.execute("begin;")
 		cursor.executemany("insert or ignore into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?;", updatebindings)
 		cursor.execute("commit;")
+	# Generating a new string, optionally with a given base sentence and optionally starting with the last word
 	def generatestring(self, sentence = '', invert = False):
 		wid = -1
-		# if the sentence given is not empty
+		# if the given base sentence is not empty
+		# we split the words and find out their database identifiers
 		if len(sentence) > 0:
 			sentence = sentence.strip()
 			# begin the random part with the last word of the sentence
@@ -118,119 +121,118 @@ class Botman:
 				finished = True
 		return sentence
 
-class IRCBotman(irc.bot.SingleServerIRCBot):
-	def __init__(self, settings, dbconnection):
-		self.settings = settings
-		self.dbc = dbconnection
+
+class BotmanInterface:
+	COMMAND_SIGN = '/'
+	COMMAND_SENTENCE = 'phrase'
+	COMMAND_SENTENCE_INV = 'phraseinv'
+	MODE_RUN = 0
+	MODE_CONFIGURE = 1
+	MODE_INIT = 2
+	MODE_FEED = 3
+	MODE_HELP = 4
+	def __init__(self, arguments = sys.argv):
+		if not os.path.exists(DBFILENAME):
+			print('Launch the script with the parameter "init" to initialize the database first')
+			sys.exit()
+		self.dbc = apsw.Connection(DBFILENAME)
+		self.settings = SettingGroup(self.dbc)
+		self.corebot = BotmanCore(self.dbc)
 		self.sr = random.SystemRandom()
-		self.botman = Botman(settings, dbconnection)
-		self.initcounter()
-		irc.bot.SingleServerIRCBot.__init__(self, [(self.settings['server'], int(self.settings['port']))], self.settings['nick'], self.settings['nick'])
-	def initcounter(self):
-		self.counter = self.sr.randint(15, 25)
-	def on_nicknameinuse(self, c, e):
-		c.nick(self.settings['nick2'])
-	def on_welcome(self, c, e):
-		c.join(self.settings['channel'])
-	def on_pubmsg(self, c, e):
-		self.reply(c, e, e.target)
-	def on_privmsg(self, c, e):
-		nick = e.source[:e.source.find('!')]
-		self.reply(c, e, nick)
-	def on_join(self, c, e):
-		print('Joining channel', e.target)
-	def on_kick(self, c, e):
-		if e.target == self.settings['channel'] and e.arguments[0] == c.get_nickname():
-			c.join(self.settings['channel'])
-	def reply(self, c, e, target):
-		msg = e.arguments[0]
-		if msg[0] == '!':
-			command = msg.split(' ')
-			if command[0] == '!phrase':
+		# Counter for the random sentences
+		self.counter = {}
+		# Aliases that the bot responds to
+		self.aliases = []
+		for alias in self.settings['aliases']:
+			alias = alias.strip()
+			if len(alias) > 0:
+				self.aliases.append(alias.lower())
+		self.mode = self.MODE_RUN
+		if len(arguments) > 1:
+			if arguments[1] == 'init':
+				self.mode = self.MODE_INIT
+			elif arguments[1] == 'config':
+				self.mode = self.MODE_CONFIGURE
+			elif arguments[1] == 'help':
+				self.mode = self.MODE_HELP
+			elif arguments[1] == 'feed':
+				self.mode = self.MODE_FEED
+				self.filestofeed = arguments[2:]
+	def initcounter(self, conversationid):
+		self.counter[conversationid] = self.sr.randint(15, 25)
+	# Receive a message
+	def receivemessage(self, message, conversationid, userparams = None):
+		if conversationid not in self.counter:
+			self.initcounter(conversationid)
+		if message[0] == self.COMMAND_SIGN:
+			arguments = message.split(' ')
+			command = arguments[0][len(self.COMMAND_SIGN):]
+			if command == self.COMMAND_SENTENCE:
 				if len(command) > 1:
-					self.sendnewsentence(c, target, msg[len(command[0]):])
+					self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], False, userparams)
 				else:
-					self.sendnewsentence(c, target)
-			elif command[0] == '!phraseinv' and len(command) > 1:
-				self.sendnewsentence(c, target, msg[len(command[0]):], True)
+					self.sendnewsentence(conversationid, '', False, userparams)
+			elif command == self.COMMAND_SENTENCE_INV:
+				self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], True, userparams)
 		else:
-			self.botman.readstring(msg)
-			if str(c.get_nickname()).lower() in str(msg).lower():
-				self.sendnewsentence(c, target)
+			# Reading the current message
+			self.corebot.readstring(message)
+			lowermsg = str(message).lower()
+			highlighted = False
+			for alias in self.aliases:
+				if alias in lowermsg:
+					highlighted = True
+					break
+			if highlighted:
+				self.sendnewsentence(conversationid, '', False, userparams)
 			else:
-				self.counter -= 1
-				if self.counter <= 0:
-					self.sendnewsentence(c, target)
-					self.initcounter()
-	def sendnewsentence(self, c, target, msg = None, invert = False):
-		sentence = ''
-		if msg:
-			sentence = self.botman.generatestring(msg, invert)
-		else:
-			sentence = self.botman.generatestring()
-		c.privmsg(target, sentence.replace("\r","").replace("\n",""))
-
-irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
-
-def configure():
-	connection=apsw.Connection(DBFILENAME)
-	settings = SettingGroup(connection)
-	print('IRC server:')
-	settings['server'] = input('> ').strip()
-	print('Port: (if empty, 6667)')
-	port = input('> ').strip()
-	if port == '':
-		settings['port'] = 6667
-	else:
-		settings['port'] = port
-	print('Nickname:')
-	settings['nick'] = input('> ').strip()
-	settings['nick2'] = settings['nick'] + '_'
-	print('Channel:')
-	settings['channel'] = input('> ').strip()
-	connection.close()
-
-def display_help():
-	print('Usage: ./botman.py [optional command]')
-	print('List of special commands:')
-	print('* help to print this help')
-	print('* init to initialize the database and configuration then launch the bot for the first time')
-	print('* config to only change the configuration of the bot, such as IRC settings')
-	print('* feed [filename] to feed a text file to the database')
-
-def feed_db(filenames):
-	connection=apsw.Connection(DBFILENAME)
-	botman = Botman(SettingGroup(connection), connection)
-	slist = []
-	for filename in filenames:
-		with open(filename, 'r', encoding='utf-8') as infile:
-			for line in infile:
-				if len(line) > 0:
-					slist.append(line.replace("\r", "").replace("\n", "").replace("\t", " "))
-	for sentence in slist:
-		botman.readstring(sentence)
-	connection.close()
-
-if len(sys.argv) > 1:
-	if sys.argv[1] == 'init':
-		if os.path.exists(DBFILENAME):
-			os.remove(DBFILENAME)
-		connection=apsw.Connection(DBFILENAME)
-		dbinit(connection)
-		connection.close()
-	if sys.argv[1] in ['init', 'config']:
-		configure()
-	elif sys.argv[1] == 'help':
-		display_help()
-	elif sys.argv[1] == 'feed':
-		feed_db(sys.argv[2:])
-	if sys.argv[1] in ['config', 'help', 'feed']:
-		sys.exit()
-if not os.path.exists(DBFILENAME):
-	print('Launch the script with the parameter "init" to initialize the database first')
-	sys.exit()
-connection=apsw.Connection(DBFILENAME)
-settings = SettingGroup(connection)
-nbm = IRCBotman(settings, connection)
-nbm.start()
-connection.close()
+				self.counter[conversationid] -= 1
+				if self.counter[conversationid] <= 0:
+					self.sendnewsentence(conversationid, '', False, userparams)
+	def sendnewsentence(self, target, base = '', invert = False, userparams = None):
+		sentence = self.corebot.generatestring(base, invert)
+		return sentence
+	def display_help(self):
+		print('Usage: ./botman.py [optional command]')
+		print('List of special commands:')
+		print('* help to print this help')
+		print('* init to initialize the database and configuration then launch the bot for the first time')
+		print('* config to only change the configuration of the bot, such as IRC settings')
+		print('* feed [filename] to feed a text file to the database')
+	def configure(self):
+		print('Current aliases:', self.aliases)
+		aliases = input('Aliases (separated by commas, empty = unchanged, . = empty): ')
+		if aliases == '.':
+			self.settings['aliases'] = ''
+		elif len(aliases) > 0:
+			self.settings['aliases'] = aliases
+	def feed_db(self):
+		for filename in filenames:
+			with open(filename, 'r', encoding='utf-8') as infile:
+				for line in infile:
+					stripped = line.replace("\r", "").replace("\t", " ").strip()
+					if len(stripped) > 0:
+						self.corebot.readstring(stripped)
+	def run(self):
+		exiting = False
+		if self.mode == self.MODE_INIT:
+			# Deleting the SQLite file to fully reset the databse
+			filename = self.dbc.db_filename('main')
+			self.dbc.close()
+			if os.path.exists(filename):
+				os.remove(filename)
+			self.dbc = apsw.Connection(filename)
+			self.settings = SettingGroup(self.dbc)
+			self.corebot = BotmanCore(self.dbc)
+		if self.mode in [self.MODE_INIT, self.MODE_CONFIGURE]:
+			self.configure()
+			exiting = True
+		elif self.mode == self.MODE_HELP:
+			self.display_help()
+			exiting = True
+		elif self.mode == self.MODE_FEED:
+			self.feed_db()
+			exiting = True
+		return exiting
+	def close(self):
+		self.dbc.close()
