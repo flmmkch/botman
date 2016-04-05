@@ -165,7 +165,7 @@ class BotmanInterface:
 		# Aliases that the bot responds to
 		self.aliases = []
 		if 'aliases' in self.settings:
-			for alias in self.settings['aliases']:
+			for alias in self.settings['aliases'].split(','):
 				alias = alias.strip().lower()
 				if len(alias) > 0:
 					self.aliases.append(alias)
