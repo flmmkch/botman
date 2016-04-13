@@ -187,7 +187,6 @@ class BotmanInterface:
 				self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], True, userparams)
 		else:
 			# Reading the current message
-			self.corebot.readstring(message)
 			lowermsg = str(message).lower()
 			highlighted = False
 			for alias in self.aliases:
@@ -195,8 +194,11 @@ class BotmanInterface:
 					highlighted = True
 					break
 			if highlighted:
+				if 'highlightlearn' not in self.settings or self.settings['highlightlearn'][0].lower() != 'n':
+					self.corebot.readstring(message)
 				self.sendnewsentence(conversationid, '', False, userparams)
 			else:
+				self.corebot.readstring(message)
 				self.counter[conversationid] -= 1
 				if self.counter[conversationid] <= 0:
 					self.sendnewsentence(conversationid, '', False, userparams)
@@ -219,6 +221,13 @@ class BotmanInterface:
 			self.settings['aliases'] = ''
 		elif len(aliases) > 0:
 			self.settings['aliases'] = aliases
+		if 'highlightlearn' not in self.settings:
+			questionstring = 'Learn messages calling to the bot? (Y/n, empty = unchanged): '
+		else:
+			questionstring = 'Learn messages calling to the bot? (Y/n, empty = unchanged from ' + self.settings['highlightlearn'] + '): '
+		highlightlearn = input(questionstring).strip()
+		if len(highlightlearn) > 0:
+			self.settings['highlightlearn'] = highlightlearn
 	def feed_db(self):
 		for filename in self.filestofeed:
 			with open(filename, 'r', encoding='utf-8') as infile:
