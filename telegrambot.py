@@ -34,15 +34,19 @@ class TelegramBotman(BotmanInterface):
 			parameters.append((str(key), str(value)))
 		urlparams = urlparse.urlencode(parameters).encode('UTF-8')
 		final_url = '%s%s/%s' % (BASE_URL, self.apikey, method)
-		return json.loads(url.urlopen(final_url, urlparams).read().decode('UTF-8'))
+		try:
+			return json.loads(url.urlopen(final_url, urlparams).read().decode('UTF-8'))
+		except urllib.error.URLError:
+			return
 	def update(self):
 		updates = self.getJsonResponse('getUpdates', offset=int(self.settings['telegram_lastUpdate']))
 		lastUpdate = None
-		for update in updates['result']:
-			self.process_update(update)
-			lastUpdate = update['update_id']
-		if lastUpdate:
-			self.settings['telegram_lastUpdate'] = lastUpdate + 1
+		if updates:
+			for update in updates['result']:
+				self.process_update(update)
+				lastUpdate = update['update_id']
+			if lastUpdate:
+				self.settings['telegram_lastUpdate'] = lastUpdate + 1
 		sleep(1)
 	def process_update(self, update):
 		if 'message' in update:
