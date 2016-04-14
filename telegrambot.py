@@ -36,7 +36,8 @@ class TelegramBotman(BotmanInterface):
 		final_url = '%s%s/%s' % (BASE_URL, self.apikey, method)
 		try:
 			return json.loads(url.urlopen(final_url, urlparams).read().decode('UTF-8'))
-		except urllib.error.URLError:
+		except urllib.error.URLError as err:
+			print('URL error:', err)
 			return
 	def update(self):
 		updates = self.getJsonResponse('getUpdates', offset=int(self.settings['telegram_lastUpdate']))
