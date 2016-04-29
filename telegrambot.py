@@ -2,6 +2,7 @@
 
 import os, sys, time, random
 import apsw
+import urllib.error.URLError
 import urllib.request as url
 import urllib.parse as urlparse
 from time import sleep
@@ -36,7 +37,7 @@ class TelegramBotman(BotmanInterface):
 		final_url = '%s%s/%s' % (BASE_URL, self.apikey, method)
 		try:
 			return json.loads(url.urlopen(final_url, urlparams).read().decode('UTF-8'))
-		except urllib.error.URLError as err:
+		except URLError as err:
 			print('URL error:', err)
 			return
 	def update(self):
