@@ -2,9 +2,9 @@
 
 import os, sys, time, random
 import apsw
-import urllib.error.URLError
 import urllib.request as url
 import urllib.parse as urlparse
+from urllib.error import URLError
 from time import sleep
 from threading import Thread, Lock, current_thread, Event
 from signal import signal, SIGINT, SIGTERM, SIGABRT
