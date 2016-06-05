@@ -205,6 +205,8 @@ class BotmanInterface:
 					self.initcounter(conversationid)
 	def sendnewsentence(self, target, base = '', invert = False, userparams = None):
 		sentence = self.corebot.generatestring(base, invert)
+		if sentence == base:
+            sentence = base + self.corebot.generatestring('', invert)
 		return sentence
 	def display_help(self):
 		print('Usage: ./botman.py [optional command]')
