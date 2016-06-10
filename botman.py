@@ -105,14 +105,12 @@ class BotmanCore:
 			while not word:
 				randomnumber = self.sr.randint(0, totaloccurences - 1)
 				noccurences = 0
-				foundWord = False
 				for choice in nwchoices:
 					noccurences += choice[1]
 					if noccurences > randomnumber:
 						word = choice
-						foundWord = True
-				if foundWord and (wordcount > 0 or word[2] >= 0):
-					break
+				if word and wordcount <= 0 and word[2] <= -1:
+					word = None
 			# Adding the word to the sentence
 			wid = word[2]
 			wordcount += 1
