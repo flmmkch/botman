@@ -94,7 +94,7 @@ class BotmanCore:
 						nextword = result[0]
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
-			if wordcount = 0 and len(nwchoices) == 1 and nwchoices[0][2] == -1:
+			if wordcount == 0 and len(nwchoices) == 1 and nwchoices[0][2] == -1:
 				wid = -1
 				continue
 			# Quit if there's no choice
