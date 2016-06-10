@@ -118,11 +118,11 @@ class BotmanCore:
 			wordcount += 1
 			if wid >= 0 and word[0]:
 				if invert:
-					if wordcount > 0:
+					if len(sentence) > 0:
 						sentence = ' ' + sentence
 					sentence = word[0] + sentence
 				else:
-					if wordcount > 0:
+					if len(sentence) > 0:
 						sentence += ' '
 					sentence += word[0]
 				if len(sentence) > MAX_SENTENCE:
