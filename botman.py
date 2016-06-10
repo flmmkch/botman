@@ -94,6 +94,7 @@ class BotmanCore:
 						nextword = result[0]
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
+			# if there is only the end of the sentence available but we're just starting to generate it then we'll try to generate something from scratch
 			if wordcount == 0 and len(nwchoices) == 1 and nwchoices[0][2] == -1:
 				wid = -1
 				continue
@@ -109,7 +110,8 @@ class BotmanCore:
 					noccurences += choice[1]
 					if noccurences > randomnumber:
 						word = choice
-				if word and wordcount <= 0 and word[2] <= -1:
+						break
+				if word != None and wordcount <= 0 and word[2] <= -1:
 					word = None
 			# Adding the word to the sentence
 			wid = word[2]
