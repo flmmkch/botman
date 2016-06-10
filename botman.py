@@ -78,6 +78,7 @@ class BotmanCore:
 			if presumed_wid:
 				wid = presumed_wid[0]
 		finished = False
+		wordcount = 0
 		while not finished:
 			if invert:
 				nwquery = "select prevword, occurences from seqs where nextword = ?;"
@@ -93,28 +94,35 @@ class BotmanCore:
 						nextword = result[0]
 				nwchoices.append((nextword, occurences, nwid))
 				totaloccurences += occurences
+			if len(nwchoices) == 1 and nwchoices[0][2] == -1:
+				wid = -1
+				continue
 			# Quit if there's no choice
-			if totaloccurences == 0:
+			elif totaloccurences == 0:
 				return sentence
 			# Weighted random for actually picking the next word
 			word = None
 			while not word:
 				randomnumber = self.sr.randint(0, totaloccurences - 1)
 				noccurences = 0
+				foundWord = False
 				for choice in nwchoices:
 					noccurences += choice[1]
 					if noccurences > randomnumber:
 						word = choice
-						break
+						foundWord = True
+				if foundWord and (wordcount > 0 or word.wid >= 0):
+					break
 			# Adding the word to the sentence
 			wid = word[2]
+			wordcount += 1
 			if wid >= 0 and word[0]:
 				if invert:
-					if len(sentence) > 0:
+					if wordcount > 0:
 						sentence = ' ' + sentence
 					sentence = word[0] + sentence
 				else:
-					if len(sentence) > 0:
+					if wordcount > 0:
 						sentence += ' '
 					sentence += word[0]
 				if len(sentence) > MAX_SENTENCE:
@@ -204,10 +212,7 @@ class BotmanInterface:
 					self.sendnewsentence(conversationid, '', False, userparams)
 					self.initcounter(conversationid)
 	def sendnewsentence(self, target, base = '', invert = False, userparams = None):
-		sentence = self.corebot.generatestring(base, invert)
-		if sentence.strip() == base.strip():
-			sentence = base.strip() + " " + self.corebot.generatestring('', invert)
-		return sentence
+		return self.corebot.generatestring(base, invert)
 	def display_help(self):
 		print('Usage: ./botman.py [optional command]')
 		print('List of special commands:')
