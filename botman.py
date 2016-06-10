@@ -111,7 +111,7 @@ class BotmanCore:
 					if noccurences > randomnumber:
 						word = choice
 						foundWord = True
-				if foundWord and (wordcount > 0 or word.wid >= 0):
+				if foundWord and (wordcount > 0 or word[2] >= 0):
 					break
 			# Adding the word to the sentence
 			wid = word[2]
