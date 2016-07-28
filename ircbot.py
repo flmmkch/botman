@@ -3,6 +3,7 @@
 import os, sys, time, random
 import apsw
 import irc, irc.bot
+from jaraco.stream import buffer
 import unicodedata
 from botman import SettingGroup, BotmanCore, BotmanInterface
 
@@ -58,7 +59,7 @@ class IRCBotmanHandler(irc.bot.SingleServerIRCBot):
 	def send(self, c, sentence, target):
 		c.privmsg(target, sentence)
 
-irc.client.ServerConnection.buffer_class = irc.buffer.LenientDecodingLineBuffer
+irc.client.ServerConnection.buffer_class = buffer.LenientDecodingLineBuffer
 
 botman = IRCBotmanHandler()
 botman.start()
