@@ -2,7 +2,6 @@
 
 import os, sys, time, random
 import apsw
-import irc, irc.bot
 import unicodedata
 
 DBFILENAME='botman.sqlite'
