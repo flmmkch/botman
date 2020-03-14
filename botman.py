@@ -9,6 +9,7 @@ MAX_SENTENCE = 320
 # reply rate : int between 0 and 100
 SETTINGS_REPLY_RATE_KEY = 'REPLY_RATE'
 SETTINGS_DEFAULT_REPLY_RATE = 25
+REPLY_RATE_HIGHLIGHT_MULTIPLIER = 3
 
 class SettingGroup:
 	def __init__(self, connection):
@@ -249,9 +250,9 @@ class BotmanInterface:
 			if highlighted:
 				if 'highlightlearn' not in self.settings or self.settings['highlightlearn'][0].lower() != 'n':
 					read_result = self.corebot.readstring(message)
-				else
+				else:
 					read_result = ReadStringResult(message.split(' '))
-				read_result.reply_rate_multiplier = 3
+				read_result.reply_rate_multiplier = REPLY_RATE_HIGHLIGHT_MULTIPLIER
 				self.sendnewsentence(conversationid, '', False, read_result, userparams)
 			else:
 				read_result = self.corebot.readstring(message)
