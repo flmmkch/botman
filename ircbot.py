@@ -27,8 +27,8 @@ class IRCBotman(BotmanInterface):
 		self.settings['irc_nick2'] = self.settings['irc_nick'] + '_'
 		print('Channel:')
 		self.settings['irc_channel'] = input('> ').strip()
-	def sendnewsentence(self, target, base = '', invert = False, userparams = None):
-		sentence = super().sendnewsentence(target, base, invert, userparams)
+	def sendnewsentence(self, target, base = '', invert = False, read_result = None, userparams = None):
+		sentence = super().sendnewsentence(target, base, invert, read_result, userparams)
 		self.handler.send(userparams['c'], sentence.replace("\r","").replace("\n",""), target)
 
 class IRCBotmanHandler(irc.bot.SingleServerIRCBot):
