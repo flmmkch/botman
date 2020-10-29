@@ -57,8 +57,8 @@ class TelegramBotman(BotmanInterface):
 				chat_id = int(update['message']['chat']['id'])
 				message_id = int(update['message']['message_id'])
 				self.receivemessage(message, chat_id, {'original_id': message_id})
-	def sendnewsentence(self, chat_id, base = '', invert = False, read_result = None, userparams = None):
-		sentence = self.corebot.sendnewsentence(chat_id, base, invert, read_result, userparams)
+	def sendnewsentence(self, chat_id, base = '', invert = False, userparams = None):
+		sentence = self.corebot.generatestring(base, invert)
 		if 'original_id' in userparams and self.counter[chat_id] > 0:
 			self.getJsonResponse('sendMessage', chat_id=chat_id, text=sentence, reply_to_message_id=userparams['original_id'])
 		else:

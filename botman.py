@@ -6,9 +6,6 @@ import unicodedata
 
 DBFILENAME='botman.sqlite'
 MAX_SENTENCE = 320
-# reply rate : int between 0 and 100
-SETTINGS_REPLY_RATE_KEY = 'REPLY_RATE'
-SETTINGS_DEFAULT_REPLY_RATE = 25
 
 class SettingGroup:
 	def __init__(self, connection):
@@ -28,19 +25,6 @@ class SettingGroup:
 	def __contains__(self, a):
 		return a in self.s
 
-class ReadStringResult:
-	def __init__(self, words = []):
-		self.words = words
-		self.reply_rate_multiplier = 1
-	def last_word(self):
-		if len(self.words) > 0:
-			return self.words[-1]
-		return None
-	def first_word(self):
-		if len(self.words) > 0:
-			return self.words[0]
-		return None
-
 class BotmanCore:
 	def __init__(self, dbconnection):
 		self.dbc = dbconnection
@@ -53,27 +37,21 @@ class BotmanCore:
 									create table seqs(prevword int, nextword int, occurences int default 0, primary key(prevword, nextword)); \
 									create index widx on words(word); \
 									create index wseq on seqs(prevword, nextword);")
-	# Get the reply rate as a percentage
-	def get_reply_rate_from_db(self):
-		reply_rate_string_res = self.dbc.cursor().execute("select sval from settings where skey = ?;", (SETTINGS_REPLY_RATE_KEY,)).fetchone()
-		if reply_rate_string_res:
-			reply_rate = int(reply_rate_string_res[0])
-			return reply_rate
-		return SETTINGS_DEFAULT_REPLY_RATE
 	# Reading and processing a string
 	def readstring(self, string):
 		if len(string) == 0:
-			return ReadStringResult()
+			return
 		cursor = self.dbc.cursor()
-		rw = [raw_word for raw_word in string.split(' ')]
-		rw_tuples = [(raw_word,) for raw_word in rw]
+		rw = []
+		for rawword in string.split(' '):
+			rw.append((rawword,))
 		cursor.execute("begin;")
-		cursor.executemany("insert or ignore into words(word) values(?);", rw_tuples)
+		cursor.executemany("insert or ignore into words(word) values(?);", rw)
 		cursor.execute("commit;")
 		# For each word we add an occurence with the preceding word
 		updatebindings = []
 		preceding = -1
-		for wordid, in cursor.executemany("select rowid from words where word = ?;", rw_tuples):
+		for wordid, in cursor.executemany("select rowid from words where word = ?;", rw):
 			updatebindings.append((preceding, wordid, preceding, wordid))
 			preceding = wordid
 		# Then we add the sentence ending occurence (-1)
@@ -82,38 +60,9 @@ class BotmanCore:
 		cursor.execute("begin;")
 		cursor.executemany("insert or ignore into seqs(prevword, nextword) values(?, ?); update seqs set occurences = occurences + 1 where prevword = ? and nextword = ?;", updatebindings)
 		cursor.execute("commit;")
-		return ReadStringResult(rw)
-	# decide whether this should be a reply or not according to the reply rate
-	def decide_reply_dice_throw(self, reply_rate_multiplier = 1):
-		reply_rate = self.get_reply_rate_from_db()
-		randomnumber = self.sr.randint(1, 100)
-		final_reply_rate = reply_rate * reply_rate_multiplier
-		return randomnumber < final_reply_rate
-	def get_rowid_for_word(self, word):
-		presumed_wid = self.dbc.cursor().execute("select rowid from words where word = ?;", (word,)).fetchone()
-		if presumed_wid:
-			return presumed_wid[0]
-		return None
-	def add_word_to_sentence(self, sentence, word, wid, invert):
-		finished = False
-		if wid >= 0 and word:
-			if invert:
-				if len(sentence) > 0:
-					sentence = ' ' + sentence
-				sentence = word + sentence
-			else:
-				if len(sentence) > 0:
-					sentence += ' '
-				sentence += word
-			if len(sentence) > MAX_SENTENCE:
-				finished = True
-		else:
-			finished = True
-		return (sentence, finished)
 	# Generating a new string, optionally with a given base sentence and optionally starting with the last word
-	def generatestring(self, sentence = '', invert = False, read_result = None):
+	def generatestring(self, sentence = '', invert = False):
 		wid = -1
-		wordcount = 0
 		# if the given base sentence is not empty
 		# we split the words and find out their database identifiers
 		if len(sentence) > 0:
@@ -124,17 +73,11 @@ class BotmanCore:
 				startword = 0
 			else:
 				startword = -1
-			wid = self.get_rowid_for_word(wordlist[startword]) or wid
-		elif read_result and self.decide_reply_dice_throw(read_result.reply_rate_multiplier):
-			start_word_string = None
-			if invert:
-				start_word_string = read_result.first_word()
-			else:
-				start_word_string = read_result.last_word()
-			wid = self.get_rowid_for_word(start_word_string) or wid
-			wordcount += 1
-			(sentence, finished) = self.add_word_to_sentence(sentence, start_word_string, wid, invert)
+			presumed_wid = self.dbc.cursor().execute("select rowid from words where word = ?;", (wordlist[startword],)).fetchone()
+			if presumed_wid:
+				wid = presumed_wid[0]
 		finished = False
+		wordcount = 0
 		while not finished:
 			if invert:
 				nwquery = "select prevword, occurences from seqs where nextword = ?;"
@@ -172,7 +115,19 @@ class BotmanCore:
 			# Adding the word to the sentence
 			wid = word[2]
 			wordcount += 1
-			(sentence, finished) = self.add_word_to_sentence(sentence, word[0], wid, invert)
+			if wid >= 0 and word[0]:
+				if invert:
+					if len(sentence) > 0:
+						sentence = ' ' + sentence
+					sentence = word[0] + sentence
+				else:
+					if len(sentence) > 0:
+						sentence += ' '
+					sentence += word[0]
+				if len(sentence) > MAX_SENTENCE:
+					finished = True
+			else:
+				finished = True
 		return sentence
 
 
@@ -227,17 +182,16 @@ class BotmanInterface:
 	def receivemessage(self, message, conversationid, userparams = None):
 		if not conversationid in self.counter:
 			self.initcounter(conversationid)
-		read_result = None
 		if message[0] == self.COMMAND_SIGN:
 			arguments = message.split(' ')
 			command = arguments[0][len(self.COMMAND_SIGN):]
 			if command == self.COMMAND_SENTENCE:
 				if len(command) > 1:
-					self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], False, read_result, userparams)
+					self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], False, userparams)
 				else:
-					self.sendnewsentence(conversationid, '', False, read_result, userparams)
+					self.sendnewsentence(conversationid, '', False, userparams)
 			elif command == self.COMMAND_SENTENCE_INV:
-				self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], True, read_result, userparams)
+				self.sendnewsentence(conversationid, message[len(self.COMMAND_SIGN + command):], True, userparams)
 		else:
 			# Reading the current message
 			lowermsg = str(message).lower()
@@ -248,19 +202,16 @@ class BotmanInterface:
 					break
 			if highlighted:
 				if 'highlightlearn' not in self.settings or self.settings['highlightlearn'][0].lower() != 'n':
-					read_result = self.corebot.readstring(message)
-				else
-					read_result = ReadStringResult(message.split(' '))
-				read_result.reply_rate_multiplier = 3
-				self.sendnewsentence(conversationid, '', False, read_result, userparams)
+					self.corebot.readstring(message)
+				self.sendnewsentence(conversationid, '', False, userparams)
 			else:
-				read_result = self.corebot.readstring(message)
+				self.corebot.readstring(message)
 				self.counter[conversationid] -= 1
 				if self.counter[conversationid] <= 0:
-					self.sendnewsentence(conversationid, '', False, read_result, userparams)
+					self.sendnewsentence(conversationid, '', False, userparams)
 					self.initcounter(conversationid)
-	def sendnewsentence(self, target, base = '', invert = False, read_result = None, userparams = None):
-		return self.corebot.generatestring(base, invert, read_result)
+	def sendnewsentence(self, target, base = '', invert = False, userparams = None):
+		return self.corebot.generatestring(base, invert)
 	def display_help(self):
 		print('Usage: ./botman.py [optional command]')
 		print('List of special commands:')
